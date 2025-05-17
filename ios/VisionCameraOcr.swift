@@ -1,3 +1,5 @@
+#if VISION_CAMERA_ENABLE_FRAME_PROCESSORS
+import VisionCamera
 import Vision
 import AVFoundation
 import MLKitVision
@@ -51,11 +53,17 @@ struct RootObject: Codable {
 }
 
 
-@objc(OCRFrameProcessorPlugin)
-public class OCRFrameProcessorPlugin: NSObject, FrameProcessorPluginBase {
+@objc(VisionCameraOcr)
+public class VisionCameraOcr: FrameProcessorPlugin {
     
 
     private static var textRecognizer = TextRecognizer.textRecognizer(options: TextRecognizerOptions.init())
+    
+    public override init(proxy: VisionCameraProxyHolder, options: [AnyHashable: Any]! = [:]) {
+        super.init(proxy: proxy, options: options)
+
+        print("VisionCameraOcr initialized with options: \(String(describing: options))")
+    }
     
     private static func getBlockArray(_ blocks: [TextBlock]) -> [[String: Any]] {
         
@@ -497,3 +505,4 @@ func isDeviceInLandscapeWhenFaceUp() -> Bool {
     // Otherwise, check if the current device orientation is landscape
     return orientation == .landscapeLeft || orientation == .landscapeRight
 }
+#endif
