@@ -162,12 +162,11 @@ public class VisionCameraOcr: FrameProcessorPlugin {
         ]
     }
     
-    @objc
-    public static func callback(_ frame: Frame!, withArgs _: [Any]!) -> Any! {
+   public override func callback(_ frame: Frame, withArguments arguments: [AnyHashable : Any]?) -> Any {
         
         guard let imageBuffer = CMSampleBufferGetImageBuffer(frame.buffer) else {
           print("Failed to get image buffer from sample buffer.")
-          return nil
+         return [:]
         }
 
         var ciImage = CIImage(cvPixelBuffer: imageBuffer)
@@ -194,7 +193,7 @@ public class VisionCameraOcr: FrameProcessorPlugin {
         }
         guard let cgImage = CIContext().createCGImage(ciImage, from: ciImage.extent) else {
             print("Failed to create bitmap from image.")
-            return nil
+           return [:]
         }
        
         let image = UIImage(cgImage: cgImage)
@@ -374,21 +373,21 @@ public class VisionCameraOcr: FrameProcessorPlugin {
         
         // Calculate brightness
         let brightness = calculateBrightness(image: image)
-        if let brightnessValue = brightness {
-            print("Image Brightness: \(brightnessValue)")
-        } else {
-            print("Failed to calculate image brightness.")
-        }
+        // if let brightnessValue = brightness {
+        //     print("Image Brightness: \(brightnessValue)")
+        // } else {
+        //     print("Failed to calculate image brightness.")
+        // }
 
         //calculate sharpness
         let sharpness = calculateSharpness(image: image)
-        if let sharpnessValue = sharpness {
-            print("Image Sharpness: \(sharpnessValue)")
-        } else {
-            print("Failed to calculate image sharpness.")
-        }
-        print("");
-        print("");
+        // if let sharpnessValue = sharpness {
+        //     print("Image Sharpness: \(sharpnessValue)")
+        // } else {
+        //     print("Failed to calculate image sharpness.")
+        // }
+        // print("");
+        // print("");
         //
         for observation in observations {
             guard let topCandidate = observation.topCandidates(1).first else { continue }

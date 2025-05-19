@@ -7,8 +7,8 @@
 #import <VisionCamera/FrameProcessorPlugin.h>
 #import <VisionCamera/FrameProcessorPluginRegistry.h>
 #import <VisionCamera/Frame.h>
-#import "VisionCameraOcr-Swift.h"
-#import "VisionCameraOcr-Bridging-Header.h"
+#import "vision_camera_ocr-Swift.h"
+
 /*@interface VisionCameraOcr : FrameProcessorPlugin
 @end
 VISION_EXPORT_SWIFT_FRAME_PROCESSOR(VisionCameraOcr, scanOCR)*/
