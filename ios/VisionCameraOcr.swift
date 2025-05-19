@@ -1,4 +1,3 @@
-#if VISION_CAMERA_ENABLE_FRAME_PROCESSORS
 import VisionCamera
 import Vision
 import AVFoundation
@@ -504,4 +503,3 @@ func isDeviceInLandscapeWhenFaceUp() -> Bool {
     // Otherwise, check if the current device orientation is landscape
     return orientation == .landscapeLeft || orientation == .landscapeRight
 }
-#endif
