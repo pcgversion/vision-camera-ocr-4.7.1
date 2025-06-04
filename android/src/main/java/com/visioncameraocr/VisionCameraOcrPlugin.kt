@@ -4,22 +4,24 @@ import android.annotation.SuppressLint
 import android.graphics.Point
 import android.graphics.Rect
 import android.media.Image
-import androidx.camera.core.ImageProxy
-import com.facebook.react.bridge.WritableNativeArray
-import com.facebook.react.bridge.WritableNativeMap
 import com.google.android.gms.tasks.Task
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
-import com.mrousavy.camera.frameprocessor.FrameProcessorPlugin
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.ImageFormat
 import android.graphics.YuvImage
 import java.io.ByteArrayOutputStream
 import android.graphics.Matrix
+
+import androidx.camera.core.ImageProxy
+import com.mrousavy.camera.frameprocessors.Frame
+import com.mrousavy.camera.frameprocessors.FrameProcessorPlugin
+import com.mrousavy.camera.frameprocessors.VisionCameraProxy
+
 
 // OpenCV imports for image brightness and sharpness
 import org.opencv.android.Utils
@@ -34,7 +36,7 @@ import org.opencv.core.Core
 import org.opencv.core.Size
 
 
-class OCRFrameProcessorPlugin: FrameProcessorPlugin("scanOCR") {
+class VisionCameraOcrPlugin(proxy: VisionCameraProxy, options: Map<String, Any>?): FrameProcessorPlugin() {
 
     companion object {
         init {
@@ -46,85 +48,76 @@ class OCRFrameProcessorPlugin: FrameProcessorPlugin("scanOCR") {
         }
     }
 
-    private fun getBlockArray(blocks: MutableList<Text.TextBlock>): WritableNativeArray {
-        val blockArray = WritableNativeArray()
-
+    private fun getBlockArray(blocks: MutableList<Text.TextBlock>): List<Map<String, Any?>> {
+        val blockList = mutableListOf<Map<String, Any?>>()
         for (block in blocks) {
-            val blockMap = WritableNativeMap()
-
-            blockMap.putString("text", block.text)
-            blockMap.putArray("recognizedLanguages", getRecognizedLanguages(block.recognizedLanguage))
-            blockMap.putArray("cornerPoints", block.cornerPoints?.let { getCornerPoints(it) })
-            blockMap.putMap("frame", getFrame(block.boundingBox))
-            blockMap.putArray("lines", getLineArray(block.lines))
-
-            blockArray.pushMap(blockMap)
+            val blockMap = mutableMapOf<String, Any?>()
+            blockMap["text"] = block.text
+            blockMap["recognizedLanguages"] = getRecognizedLanguages(block.recognizedLanguage)
+            blockMap["cornerPoints"] = block.cornerPoints?.let { getCornerPoints(it) }
+            blockMap["frame"] = getFrame(block.boundingBox)
+            blockMap["lines"] = getLineArray(block.lines)
+            blockList.add(blockMap)
         }
-        return blockArray
+        return blockList
     }
 
-    private fun getLineArray(lines: MutableList<Text.Line>): WritableNativeArray {
-        val lineArray = WritableNativeArray()
-
+    private fun getLineArray(lines: MutableList<Text.Line>): List<Map<String, Any?>> {
+        val lineList = mutableListOf<Map<String, Any?>>()
         for (line in lines) {
-            val lineMap = WritableNativeMap()
-
-            lineMap.putString("text", line.text)
-            lineMap.putArray("recognizedLanguages", getRecognizedLanguages(line.recognizedLanguage))
-            lineMap.putArray("cornerPoints", line.cornerPoints?.let { getCornerPoints(it) })
-            lineMap.putMap("frame", getFrame(line.boundingBox))
-            lineMap.putArray("elements", getElementArray(line.elements))
-            lineMap.putDouble("confidence", line.confidence.toDouble())
-            lineMap.putDouble("angle", line.angle.toDouble())
-
-            lineArray.pushMap(lineMap)
+            val lineMap = mutableMapOf<String, Any?>()
+            lineMap["text"] = line.text
+            lineMap["recognizedLanguages"] = getRecognizedLanguages(line.recognizedLanguage)
+            lineMap["cornerPoints"] = line.cornerPoints?.let { getCornerPoints(it) }
+            lineMap["frame"] = getFrame(line.boundingBox)
+            lineMap["elements"] = getElementArray(line.elements)
+            lineMap["confidence"] = line.confidence.toDouble()
+            lineMap["angle"] = line.angle.toDouble()
+            lineList.add(lineMap)
         }
-        return lineArray
+        return lineList
     }
 
-    private fun getElementArray(elements: MutableList<Text.Element>): WritableNativeArray {
-        val elementArray = WritableNativeArray()
-
+    private fun getElementArray(elements: MutableList<Text.Element>): List<Map<String, Any?>> {
+        val elementList = mutableListOf<Map<String, Any?>>()
         for (element in elements) {
-            val elementMap = WritableNativeMap()
-
-            elementMap.putString("text", element.text)
-            elementMap.putArray("cornerPoints", element.cornerPoints?.let { getCornerPoints(it) })
-            elementMap.putMap("frame", getFrame(element.boundingBox))
+            val elementMap = mutableMapOf<String, Any?>()
+            elementMap["text"] = element.text
+            elementMap["cornerPoints"] = element.cornerPoints?.let { getCornerPoints(it) }
+            elementMap["frame"] = getFrame(element.boundingBox)
+            elementList.add(elementMap)
         }
-        return elementArray
+        return elementList
     }
 
-    private fun getRecognizedLanguages(recognizedLanguage: String): WritableNativeArray {
-        val recognizedLanguages = WritableNativeArray()
-        recognizedLanguages.pushString(recognizedLanguage)
+    private fun getRecognizedLanguages(recognizedLanguage: String): List<String> {
+        val recognizedLanguages = mutableListOf<String>()
+        recognizedLanguages.add(recognizedLanguage)
         return recognizedLanguages
     }
 
-    private fun getCornerPoints(points: Array<Point>): WritableNativeArray {
-        val cornerPoints = WritableNativeArray()
-
+    private fun getCornerPoints(points: Array<Point>): List<Map<String, Int>> {
+        val cornerPointList = mutableListOf<Map<String, Int>>()
         for (point in points) {
-            val pointMap = WritableNativeMap()
-            pointMap.putInt("x", point.x)
-            pointMap.putInt("y", point.y)
-            cornerPoints.pushMap(pointMap)
+            val pointMap = mutableMapOf<String, Int>()
+            pointMap["x"] = point.x
+            pointMap["y"] = point.y
+            cornerPointList.add(pointMap)
         }
-        return cornerPoints
+        return cornerPointList
     }
 
-    private fun getFrame(boundingBox: Rect?): WritableNativeMap {
-        val frame = WritableNativeMap()
-
+    private fun getFrame(boundingBox: Rect?): Map<String, Any?> {
+        val frameMap = mutableMapOf<String, Any?>()
         if (boundingBox != null) {
-            frame.putDouble("x", boundingBox.exactCenterX().toDouble())
-            frame.putDouble("y", boundingBox.exactCenterY().toDouble())
-            frame.putInt("width", boundingBox.width())
-            frame.putInt("height", boundingBox.height())
-            frame.putInt("boundingCenterX", boundingBox.centerX())
-            frame.putInt("boundingCenterY", boundingBox.centerY())
+            frameMap["x"] = boundingBox.exactCenterX().toDouble()
+            frameMap["y"] = boundingBox.exactCenterY().toDouble()
+            frameMap["width"] = boundingBox.width()
+            frameMap["height"] = boundingBox.height()
+            frameMap["boundingCenterX"] = boundingBox.centerX()
+            frameMap["boundingCenterY"] = boundingBox.centerY()
         }
-        return frame
+        return frameMap
     }
 
     /*override fun callback(frame: ImageProxy, params: Array<Any>): Any? {
@@ -153,42 +146,54 @@ class OCRFrameProcessorPlugin: FrameProcessorPlugin("scanOCR") {
         return data
     }*/
 
-    override fun callback(frame: ImageProxy, params: Array<Any>): Any? {
-
-        val result = WritableNativeMap()
-
-        val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    override fun callback(frame: Frame, params: Map<String, Any>?): Any? {
+        val finalResponse = mutableMapOf<String, Any?>()
+        val resultData = mutableMapOf<String, Any?>() // For data to be nested under "result" key
 
         @SuppressLint("UnsafeOptInUsageError")
         val mediaImage: Image? = frame.image
+        //Log.d("VisionCameraOcr", "Frame: orientation ${frame.orientation}, isValid ${frame.isValid}, width ${frame.width}, height ${frame.height}, image format ${mediaImage?.format}")
 
         if (mediaImage != null) {
-            val bitmap = convertImageProxyToBitmap(frame)          
+            val bitmap = convertImageProxyToBitmap(frame.imageProxy)
             if (bitmap != null) {
-         
-                val brightness = calculateBrightnessScore(bitmap)
-                val sharpness = calculateSharpnessScore(bitmap)              
-
-                val inputImage = InputImage.fromBitmap(bitmap, 0)
-                val task: Task<Text> = recognizer.process(inputImage)
                 try {
-                    val text: Text = Tasks.await(task)
-                    result.putString("text", text.text)
-                    result.putArray("blocks", getBlockArray(text.textBlocks))           
-                    result.putDouble("brightness", brightness)
-                    result.putDouble("sharpness", sharpness)
+                    val brightness = calculateBrightnessScore(bitmap)
+                    val sharpness = calculateSharpnessScore(bitmap)
 
+                    val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+                    // The bitmap from convertImageProxyToBitmap is already rotated to be upright.
+                    // So, the rotationDegrees for InputImage.fromBitmap should be 0.
+                    val inputImage = InputImage.fromBitmap(bitmap, 0)
+                    val task: Task<Text> = recognizer.process(inputImage)
+                    try {
+                        val text: Text = Tasks.await(task)
+                        resultData["text"] = text.text
+                        resultData["blocks"] = getBlockArray(text.textBlocks)
+                        resultData["brightness"] = brightness
+                        resultData["sharpness"] = sharpness
+                        finalResponse["result"] = resultData
+                    } catch (e: Exception) {
+                        Log.e("VisionCameraOcr", "Error processing text", e)
+                        finalResponse["error"] = "OCR processing failed: ${e.message}"
+                    }
                 } catch (e: Exception) {
-                    return null
+                    Log.e("VisionCameraOcr", "Error during bitmap processing (e.g. brightness/sharpness calculation)", e)
+                    finalResponse["error"] = "Bitmap processing error: ${e.message}"
+                } finally {
+                    bitmap.recycle() // Recycle bitmap after use
                 }
             } else {
-                return null
+                Log.e("VisionCameraOcr", "Bitmap conversion failed. Image format: ${mediaImage.format}")
+                finalResponse["error"] = "Bitmap conversion failed"
             }
+        } else {
+            Log.e("VisionCameraOcr", "MediaImage is null.")
+            finalResponse["error"] = "MediaImage is null"
         }
 
-        val data = WritableNativeMap()
-        data.putMap("result", result)
-        return data
+        
+        return finalResponse
     }
 
     private fun convertImageProxyToBitmap(imageProxy: ImageProxy): Bitmap? {
