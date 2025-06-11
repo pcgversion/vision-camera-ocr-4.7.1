@@ -1,12 +1,14 @@
 package com.visioncameraocr
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.graphics.Point
 import android.graphics.Rect
 import android.media.Image
 import com.google.android.gms.tasks.Task
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.common.internal.ImageConvertUtils
 import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -21,7 +23,7 @@ import androidx.camera.core.ImageProxy
 import com.mrousavy.camera.frameprocessors.Frame
 import com.mrousavy.camera.frameprocessors.FrameProcessorPlugin
 import com.mrousavy.camera.frameprocessors.VisionCameraProxy
-
+import com.facebook.react.bridge.ReactApplicationContext
 
 // OpenCV imports for image brightness and sharpness
 import org.opencv.android.Utils
@@ -35,9 +37,23 @@ import org.opencv.core.Scalar
 import org.opencv.core.Core
 import org.opencv.core.Size
 
+import java.io.IOException
+import kotlin.text.format
+import android.os.Environment
+
+import java.io.File
+import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+
+import android.view.Display
+import android.view.Surface
+import android.view.WindowManager
 
 class VisionCameraOcrPlugin(proxy: VisionCameraProxy, options: Map<String, Any>?): FrameProcessorPlugin() {
-
+    private val _context:ReactApplicationContext = proxy.context
     companion object {
         init {
             if (OpenCVLoader.initDebug()) {
@@ -149,18 +165,30 @@ class VisionCameraOcrPlugin(proxy: VisionCameraProxy, options: Map<String, Any>?
     override fun callback(frame: Frame, params: Map<String, Any>?): Any? {
         val finalResponse = mutableMapOf<String, Any?>()
         val resultData = mutableMapOf<String, Any?>() // For data to be nested under "result" key
-
+        val surfaceRotation = getDeviceSurfaceRotation(_context)
+        Log.d("VisionCameraOCR", "Frame orientation: ${frame.orientation} ${surfaceRotation}")
         @SuppressLint("UnsafeOptInUsageError")
         val mediaImage: Image? = frame.image
         //Log.d("VisionCameraOcr", "Frame: orientation ${frame.orientation}, isValid ${frame.isValid}, width ${frame.width}, height ${frame.height}, image format ${mediaImage?.format}")
-
+        var newRotation = frame.imageProxy.imageInfo.rotationDegrees
+        Log.d("OCR Rotation:", "${newRotation} ${surfaceRotation}")
+        if(surfaceRotation == 0)
+            newRotation = 90
+        if(surfaceRotation == 1)
+            newRotation = 0
+        if(surfaceRotation == 3)
+            newRotation = 180
+        
         if (mediaImage != null) {
-            val bitmap = convertImageProxyToBitmap(frame.imageProxy)
-            if (bitmap != null) {
+            val image = InputImage.fromMediaImage(mediaImage, newRotation)
+            val bitmap = ImageConvertUtils.getInstance().getUpRightBitmap(image)
+            //saveBitmapToFile(_context, bitmap, "test_image2.jpg")
+            //val bitmap = convertImageProxyToBitmap(frame.imageProxy, surfaceRotation)
+            //if (bitmap != null) {
                 try {
                     val brightness = calculateBrightnessScore(bitmap)
                     val sharpness = calculateSharpnessScore(bitmap)
-
+                    
                     val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
                     // The bitmap from convertImageProxyToBitmap is already rotated to be upright.
                     // So, the rotationDegrees for InputImage.fromBitmap should be 0.
@@ -181,22 +209,21 @@ class VisionCameraOcrPlugin(proxy: VisionCameraProxy, options: Map<String, Any>?
                     Log.e("VisionCameraOcr", "Error during bitmap processing (e.g. brightness/sharpness calculation)", e)
                     finalResponse["error"] = "Bitmap processing error: ${e.message}"
                 } finally {
-                    bitmap.recycle() // Recycle bitmap after use
+                    //bitmap.recycle() // Recycle bitmap after use
                 }
-            } else {
+            /*} else {
                 Log.e("VisionCameraOcr", "Bitmap conversion failed. Image format: ${mediaImage.format}")
                 finalResponse["error"] = "Bitmap conversion failed"
-            }
+            }*/
         } else {
             Log.e("VisionCameraOcr", "MediaImage is null.")
             finalResponse["error"] = "MediaImage is null"
         }
 
-        
         return finalResponse
     }
 
-    private fun convertImageProxyToBitmap(imageProxy: ImageProxy): Bitmap? {
+    private fun convertImageProxyToBitmap(imageProxy: ImageProxy, surfaceRotation: Int): Bitmap? {
         val image = imageProxy.image ?: return null
         val yBuffer = image.planes[0].buffer // Y
         val uBuffer = image.planes[1].buffer // U
@@ -218,21 +245,74 @@ class VisionCameraOcrPlugin(proxy: VisionCameraProxy, options: Map<String, Any>?
         val originalBitmap = BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size)
 
         // Rotate the bitmap based on the rotation degrees
-        val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+        Log.d("convertImageProxyToBitmap", "Rotation: ${imageProxy.imageInfo.rotationDegrees}")
+        var rotationDegrees =  imageProxy.imageInfo.rotationDegrees
+
+        
+        if(surfaceRotation == 1)
+            rotationDegrees = 0
+        if(surfaceRotation == 3)
+            rotationDegrees = 180 
+        
         val matrix = Matrix()
         matrix.postRotate(rotationDegrees.toFloat())
 
-        return Bitmap.createBitmap(
-            originalBitmap, 
-            0, 
-            0, 
-            originalBitmap.width, 
-            originalBitmap.height, 
-            matrix, 
+            val rotatedBitmap = Bitmap.createBitmap(
+            originalBitmap,
+            0,
+            0,
+            originalBitmap.width,
+            originalBitmap.height,
+            matrix,
             true
         )
+        // Recycle the original bitmap if it's different from the rotated one and no longer needed
+        if (originalBitmap != rotatedBitmap) {
+            originalBitmap.recycle()
+        }
+
+
+        // --- Save the rotated bitmap to a temporary file ---
+
+        saveBitmapToFile(_context, rotatedBitmap, "test_image.jpg")
+
+        // --- End saving ---
+
+        return rotatedBitmap
     }
 
+private fun saveBitmapToFile(context: Context, bitmap: Bitmap, baseFilename: String? = null) {
+        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmssSSS", Locale.US).format(Date())
+        val actualFilename = baseFilename
+
+        // Choose storage location:
+        // 1. App-specific cache directory (recommended for temporary files)
+        val cacheDir = context.cacheDir
+        val file = File(cacheDir, actualFilename)
+
+        // 2. App-specific files directory (for files you want to keep longer but private to app)
+        // val filesDir = context.getExternalFilesDir(null) // Or context.filesDir for internal
+        // val file = File(filesDir, actualFilename)
+
+        // 3. Public directory (requires more permissions and careful handling of Scoped Storage on Android 10+)
+        //    For temporary images, app-specific storage is usually better.
+        // val publicDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+        // val file = File(publicDir, actualFilename)
+        // if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q && !publicDir.exists()) {
+        // publicDir.mkdirs()
+        // }
+
+        try {
+            FileOutputStream(file).use { outStream ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 90, outStream) // Adjust quality as needed
+                outStream.flush()
+                Log.d("VisionCameraOCR", "Bitmap saved successfully to: ${file.absolutePath}")
+            }
+        } catch (e: IOException) {
+            Log.e("VisionCameraOCR", "Error saving bitmap to file", e)
+        }
+    }
+        
     //Open CV Changes
     fun calculateBrightnessScore(bitmap: Bitmap): Double {
         val brightness = calculateBrightness(bitmap)
@@ -289,5 +369,32 @@ class VisionCameraOcrPlugin(proxy: VisionCameraProxy, options: Map<String, Any>?
             mat.release() // Ensure release even in error case
             throw e
         }
+    }
+
+    /**
+     * Gets the current rotation of the device's default display surface.
+     *
+     * @param context The Android application or activity context.
+     * @return An integer representing the rotation. This will be one of:
+     *         <ul>
+     *           <li>{@link android.view.Surface#ROTATION_0} (no rotation, natural orientation)</li>
+     *           <li>{@link android.view.Surface#ROTATION_90} (rotated 90 degrees clockwise)</li>
+     *           <li>{@link android.view.Surface#ROTATION_180} (rotated 180 degrees)</li>
+     *           <li>{@link android.view.Surface#ROTATION_270} (rotated 270 degrees clockwise)</li>
+     *         </ul>
+     *         Returns -1 if the context is null or the WindowManager service cannot be accessed.
+     */
+    fun getDeviceSurfaceRotation(context: Context?): Int {
+        if (context == null) {
+            System.err.println("Error: Context cannot be null to get device surface rotation.")
+            return -1 // Or throw an IllegalArgumentException
+        }
+        val windowManager = context.getSystemService(Context.WINDOW_SERVICE)  as? WindowManager
+        return windowManager?.defaultDisplay?.rotation ?: run {
+                System.err.println("Error: Could not retrieve WindowManager or Display service.")
+                // For Android-specific logging, consider:
+                // Log.e("Frame", "Error: Could not retrieve WindowManager or Display service.")
+                -1
+            }
     }
 }
