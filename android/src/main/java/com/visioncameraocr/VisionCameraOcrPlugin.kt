@@ -166,12 +166,12 @@ class VisionCameraOcrPlugin(proxy: VisionCameraProxy, options: Map<String, Any>?
         val finalResponse = mutableMapOf<String, Any?>()
         val resultData = mutableMapOf<String, Any?>() // For data to be nested under "result" key
         val surfaceRotation = getDeviceSurfaceRotation(_context)
-        Log.d("VisionCameraOCR", "Frame orientation: ${frame.orientation} ${surfaceRotation}")
+        //Log.d("VisionCameraOCR", "Frame orientation: ${frame.orientation} ${surfaceRotation}")
         @SuppressLint("UnsafeOptInUsageError")
         val mediaImage: Image? = frame.image
         //Log.d("VisionCameraOcr", "Frame: orientation ${frame.orientation}, isValid ${frame.isValid}, width ${frame.width}, height ${frame.height}, image format ${mediaImage?.format}")
         var newRotation = frame.imageProxy.imageInfo.rotationDegrees
-        Log.d("OCR Rotation:", "${newRotation} ${surfaceRotation}")
+        //Log.d("OCR Rotation:", "${newRotation} ${surfaceRotation}")
         if(surfaceRotation == 0)
             newRotation = 90
         if(surfaceRotation == 1)
@@ -180,11 +180,11 @@ class VisionCameraOcrPlugin(proxy: VisionCameraProxy, options: Map<String, Any>?
             newRotation = 180
         
         if (mediaImage != null) {
-            val image = InputImage.fromMediaImage(mediaImage, newRotation)
-            val bitmap = ImageConvertUtils.getInstance().getUpRightBitmap(image)
+            //val image = InputImage.fromMediaImage(mediaImage, newRotation)
+            //val bitmap = ImageConvertUtils.getInstance().getUpRightBitmap(image)
             //saveBitmapToFile(_context, bitmap, "test_image2.jpg")
-            //val bitmap = convertImageProxyToBitmap(frame.imageProxy, surfaceRotation)
-            //if (bitmap != null) {
+            val bitmap: Bitmap? = convertImageProxyToBitmap(frame.imageProxy, surfaceRotation)
+            if (bitmap != null) {
                 try {
                     val brightness = calculateBrightnessScore(bitmap)
                     val sharpness = calculateSharpnessScore(bitmap)
@@ -213,8 +213,8 @@ class VisionCameraOcrPlugin(proxy: VisionCameraProxy, options: Map<String, Any>?
                 }
             /*} else {
                 Log.e("VisionCameraOcr", "Bitmap conversion failed. Image format: ${mediaImage.format}")
-                finalResponse["error"] = "Bitmap conversion failed"
-            }*/
+                finalResponse["error"] = "Bitmap conversion failed"*/
+            }
         } else {
             Log.e("VisionCameraOcr", "MediaImage is null.")
             finalResponse["error"] = "MediaImage is null"
@@ -223,11 +223,78 @@ class VisionCameraOcrPlugin(proxy: VisionCameraProxy, options: Map<String, Any>?
         return finalResponse
     }
 
-    private fun convertImageProxyToBitmap(imageProxy: ImageProxy, surfaceRotation: Int): Bitmap? {
+//    private fun convertImageProxyToBitmap(imageProxy: ImageProxy, surfaceRotation: Int): Bitmap? {
+//        val image = imageProxy.image ?: return null
+//        val yBuffer = image.planes[0].buffer // Y
+//        val uBuffer = image.planes[1].buffer // U
+//        val vBuffer = image.planes[2].buffer // V
+//
+//        val ySize = yBuffer.remaining()
+//        val uSize = uBuffer.remaining()
+//        val vSize = vBuffer.remaining()
+//
+//        val nv21 = ByteArray(ySize + uSize + vSize)
+//        yBuffer.get(nv21, 0, ySize)
+//        vBuffer.get(nv21, ySize, vSize)
+//        uBuffer.get(nv21, ySize + vSize, uSize)
+//
+//        val yuvImage = YuvImage(nv21, ImageFormat.NV21, imageProxy.width, imageProxy.height, null)
+//        val out = ByteArrayOutputStream()
+//        yuvImage.compressToJpeg(Rect(0, 0, imageProxy.width, imageProxy.height), 100, out)
+//        val byteArray = out.toByteArray()
+//        val originalBitmap = BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size)
+//
+//
+//        // Rotate the bitmap based on the rotation degrees
+//        Log.d("convertImageProxyToBitmap", "Rotation: ${imageProxy.imageInfo.rotationDegrees}")
+//        var rotationDegrees =  imageProxy.imageInfo.rotationDegrees
+//
+//
+//        if(surfaceRotation == 1)
+//            rotationDegrees = 0
+//        if(surfaceRotation == 3)
+//            rotationDegrees = 180
+//
+//        val matrix = Matrix()
+//        matrix.postRotate(rotationDegrees.toFloat())
+//
+//            val rotatedBitmap = Bitmap.createBitmap(
+//                originalBitmap,
+//            0,
+//            0,
+//                originalBitmap.width,
+//                originalBitmap.height,
+//            matrix,
+//            true
+//        )
+//        // Recycle the original bitmap if it's different from the rotated one and no longer needed
+//        if (originalBitmap != rotatedBitmap) {
+//            originalBitmap.recycle()
+//        }
+//
+//
+//
+//        // --- Save the rotated bitmap to a temporary file ---
+//
+//        //saveBitmapToFile(_context, rotatedBitmap, "test_image.jpg")
+//
+//        // --- End saving ---
+//
+//        return rotatedBitmap
+//    }
+
+    private fun convertImageProxyToBitmap(
+        imageProxy: ImageProxy,
+        surfaceRotation: Int
+    ): Bitmap? {
         val image = imageProxy.image ?: return null
-        val yBuffer = image.planes[0].buffer // Y
-        val uBuffer = image.planes[1].buffer // U
-        val vBuffer = image.planes[2].buffer // V
+        val width = imageProxy.width
+        val height = imageProxy.height
+
+        // Convert YUV_420_888 to NV21
+        val yBuffer = image.planes[0].buffer
+        val uBuffer = image.planes[1].buffer
+        val vBuffer = image.planes[2].buffer
 
         val ySize = yBuffer.remaining()
         val uSize = uBuffer.remaining()
@@ -238,47 +305,38 @@ class VisionCameraOcrPlugin(proxy: VisionCameraProxy, options: Map<String, Any>?
         vBuffer.get(nv21, ySize, vSize)
         uBuffer.get(nv21, ySize + vSize, uSize)
 
-        val yuvImage = YuvImage(nv21, ImageFormat.NV21, imageProxy.width, imageProxy.height, null)
-        val out = ByteArrayOutputStream()
-        yuvImage.compressToJpeg(Rect(0, 0, imageProxy.width, imageProxy.height), 100, out)
-        val byteArray = out.toByteArray()
-        val originalBitmap = BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size)
+        // Convert NV21 byte array to OpenCV Mat
+        val yuvMat = Mat(height + height / 2, width, CvType.CV_8UC1)
+        yuvMat.put(0, 0, nv21)
 
-        // Rotate the bitmap based on the rotation degrees
-        Log.d("convertImageProxyToBitmap", "Rotation: ${imageProxy.imageInfo.rotationDegrees}")
-        var rotationDegrees =  imageProxy.imageInfo.rotationDegrees
+        val rgbMat = Mat()
+        Imgproc.cvtColor(yuvMat, rgbMat, Imgproc.COLOR_YUV2RGB_NV21)
 
-        
-        if(surfaceRotation == 1)
-            rotationDegrees = 0
-        if(surfaceRotation == 3)
-            rotationDegrees = 180 
-        
-        val matrix = Matrix()
-        matrix.postRotate(rotationDegrees.toFloat())
+        // Determine rotation
+        var rotationDegrees = imageProxy.imageInfo.rotationDegrees
 
-            val rotatedBitmap = Bitmap.createBitmap(
-            originalBitmap,
-            0,
-            0,
-            originalBitmap.width,
-            originalBitmap.height,
-            matrix,
-            true
-        )
-        // Recycle the original bitmap if it's different from the rotated one and no longer needed
-        if (originalBitmap != rotatedBitmap) {
-            originalBitmap.recycle()
+        // Optional: override with sensor orientation if needed
+        if (surfaceRotation == 1) rotationDegrees = 0
+        if (surfaceRotation == 3) rotationDegrees = 180
+
+        val rotatedMat = Mat()
+        when (rotationDegrees) {
+            90 -> Core.rotate(rgbMat, rotatedMat, Core.ROTATE_90_CLOCKWISE)
+            180 -> Core.rotate(rgbMat, rotatedMat, Core.ROTATE_180)
+            270 -> Core.rotate(rgbMat, rotatedMat, Core.ROTATE_90_COUNTERCLOCKWISE)
+            else -> rgbMat.copyTo(rotatedMat)
         }
 
+        // Convert rotated Mat to Bitmap
+        val bitmap = Bitmap.createBitmap(rotatedMat.cols(), rotatedMat.rows(), Bitmap.Config.ARGB_8888)
+        Utils.matToBitmap(rotatedMat, bitmap)
 
-        // --- Save the rotated bitmap to a temporary file ---
+        // Release memory
+        yuvMat.release()
+        rgbMat.release()
+        rotatedMat.release()
 
-        saveBitmapToFile(_context, rotatedBitmap, "test_image.jpg")
-
-        // --- End saving ---
-
-        return rotatedBitmap
+        return bitmap
     }
 
 private fun saveBitmapToFile(context: Context, bitmap: Bitmap, baseFilename: String? = null) {
