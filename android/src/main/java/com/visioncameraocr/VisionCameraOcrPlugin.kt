@@ -8,16 +8,11 @@ import android.media.Image
 import com.google.android.gms.tasks.Task
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.common.internal.ImageConvertUtils
 import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.facebook.react.bridge.ReadableNativeMap
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.ImageFormat
-import android.graphics.YuvImage
-import java.io.ByteArrayOutputStream
-import android.graphics.Matrix
 
 import androidx.camera.core.ImageProxy
 import com.mrousavy.camera.frameprocessors.Frame
@@ -26,6 +21,7 @@ import com.mrousavy.camera.frameprocessors.VisionCameraProxy
 import com.facebook.react.bridge.ReactApplicationContext
 
 // OpenCV imports for image brightness and sharpness
+
 import org.opencv.android.Utils
 import org.opencv.core.CvType
 import org.opencv.core.Mat
@@ -33,13 +29,9 @@ import org.opencv.imgproc.Imgproc
 import android.util.Log
 import org.opencv.core.MatOfDouble
 import org.opencv.android.OpenCVLoader
-import org.opencv.core.Scalar
 import org.opencv.core.Core
-import org.opencv.core.Size
 
 import java.io.IOException
-import kotlin.text.format
-import android.os.Environment
 
 import java.io.File
 import java.io.FileOutputStream
@@ -48,12 +40,16 @@ import java.util.Date
 import java.util.Locale
 
 
-import android.view.Display
-import android.view.Surface
 import android.view.WindowManager
+import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.WritableMap
+import com.facebook.react.modules.core.DeviceEventManagerModule
+import com.mrousavy.camera.react.GraphicOverlay
 
 class VisionCameraOcrPlugin(proxy: VisionCameraProxy, options: Map<String, Any>?): FrameProcessorPlugin() {
     private val _context:ReactApplicationContext = proxy.context
+
+
     companion object {
         init {
             if (OpenCVLoader.initDebug()) {
@@ -163,9 +159,23 @@ class VisionCameraOcrPlugin(proxy: VisionCameraProxy, options: Map<String, Any>?
     }*/
 
     override fun callback(frame: Frame, params: Map<String, Any>?): Any? {
+
+        val optionsObj = params?.get("options") as? Map<*, *>
+
+        val showNativeOverlayRaw = optionsObj?.get("showNativeOverlay")
+        val showNaiveOverlay = when (showNativeOverlayRaw) {
+            is Boolean -> showNativeOverlayRaw
+            else -> {
+                false
+            }
+        }
+
+
         val finalResponse = mutableMapOf<String, Any?>()
         val resultData = mutableMapOf<String, Any?>() // For data to be nested under "result" key
         val surfaceRotation = getDeviceSurfaceRotation(_context)
+
+        val targetOverlay = com.mrousavy.camera.react.CameraView.getActiveOcrGraphicOverlay()
         //Log.d("VisionCameraOCR", "Frame orientation: ${frame.orientation} ${surfaceRotation}")
         @SuppressLint("UnsafeOptInUsageError")
         val mediaImage: Image? = frame.image
@@ -178,42 +188,74 @@ class VisionCameraOcrPlugin(proxy: VisionCameraProxy, options: Map<String, Any>?
             newRotation = 0
         if(surfaceRotation == 3)
             newRotation = 180
-        
+
         if (mediaImage != null) {
             //val image = InputImage.fromMediaImage(mediaImage, newRotation)
             //val bitmap = ImageConvertUtils.getInstance().getUpRightBitmap(image)
             //saveBitmapToFile(_context, bitmap, "test_image2.jpg")
             val bitmap: Bitmap? = convertImageProxyToBitmap(frame.imageProxy, surfaceRotation)
+
             if (bitmap != null) {
                 try {
                     val brightness = calculateBrightnessScore(bitmap)
                     val sharpness = calculateSharpnessScore(bitmap)
-                    
+
                     val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
                     // The bitmap from convertImageProxyToBitmap is already rotated to be upright.
                     // So, the rotationDegrees for InputImage.fromBitmap should be 0.
                     val inputImage = InputImage.fromBitmap(bitmap, 0)
+                    if(showNaiveOverlay)
+                    targetOverlay?.let { overlay ->
+                        overlay.imageWidth = bitmap.width
+                        overlay.imageHeight = bitmap.height
+                        // overlay.isMirrored = ... // if needed
+                        //overlay.clear()
+                    }
                     val task: Task<Text> = recognizer.process(inputImage)
                     try {
                         val text: Text = Tasks.await(task)
+                        if(showNaiveOverlay)
+                        targetOverlay?.post {
+                            targetOverlay.clear()
+                            for (block in text.textBlocks) {
+                                val cornerPointsArray: Array<Point>? = block.cornerPoints // Explicitly type for clarity
+                                if (cornerPointsArray != null) {
+                                    targetOverlay.add(
+                                        GraphicOverlay.TextBlockGraphic(
+                                            targetOverlay,
+                                            cornerPointsArray,
+                                            "ocr",
+                                            0
+                                        )
+                                    )
+                                }
+                            }
+                        }
+
                         resultData["text"] = text.text
                         resultData["blocks"] = getBlockArray(text.textBlocks)
                         resultData["brightness"] = brightness
                         resultData["sharpness"] = sharpness
                         finalResponse["result"] = resultData
+
                     } catch (e: Exception) {
                         Log.e("VisionCameraOcr", "Error processing text", e)
                         finalResponse["error"] = "OCR processing failed: ${e.message}"
+                        if(showNaiveOverlay)
+                        targetOverlay?.clear()
                     }
                 } catch (e: Exception) {
                     Log.e("VisionCameraOcr", "Error during bitmap processing (e.g. brightness/sharpness calculation)", e)
                     finalResponse["error"] = "Bitmap processing error: ${e.message}"
+                    if(showNaiveOverlay)
+                    targetOverlay?.clear()
                 } finally {
+                    //if (!bitmap.isRecycled)
                     //bitmap.recycle() // Recycle bitmap after use
                 }
-            /*} else {
-                Log.e("VisionCameraOcr", "Bitmap conversion failed. Image format: ${mediaImage.format}")
-                finalResponse["error"] = "Bitmap conversion failed"*/
+                /*} else {
+                    Log.e("VisionCameraOcr", "Bitmap conversion failed. Image format: ${mediaImage.format}")
+                    finalResponse["error"] = "Bitmap conversion failed"*/
             }
         } else {
             Log.e("VisionCameraOcr", "MediaImage is null.")

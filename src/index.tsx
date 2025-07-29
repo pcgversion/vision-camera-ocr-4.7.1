@@ -42,6 +42,10 @@ type Text = {
 export type OCRFrame = {
   result: Text;
 };
+export interface ScannerOptions {
+  showNativeOverlay?: boolean;
+}
+
 
 /**
  * Scans OCR.
@@ -55,12 +59,13 @@ export type OCRFrame = {
 
 const plugin = VisionCameraProxy.initFrameProcessorPlugin('scanOCR', {});
 
-export function scanOCR(frame: Frame): OCRFrame {
+export function scanOCR(frame: Frame, options?: ScannerOptions ): OCRFrame {
   'worklet';
   // // @ts-ignore
   // return __scanOCR(frame);
+  
   if (plugin == null)
     throw new Error('Failed to load Frame Processor Plugin "scanOCR"!');
-  
-  return plugin.call(frame, {}) as unknown as OCRFrame;
+  const pluginArgs: Record<string, any> | undefined = {options: { ...options } };
+  return plugin.call(frame, pluginArgs) as unknown as OCRFrame;
 }

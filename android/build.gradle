@@ -127,12 +127,13 @@ dependencies {
   // noinspection GradleDynamicVersion
   api 'com.facebook.react:react-native:+'
   implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+  implementation 'com.google.guava:guava:31.1-android' // Or the latest version
 
   implementation project(':react-native-vision-camera')
   implementation 'com.google.android.gms:play-services-mlkit-text-recognition:19.0.1'
   //implementation 'com.google.android.gms:play-services-mlkit-text-recognition:18.0.0'
   //implementation 'com.google.android.gms:play-services-mlkit-text-recognition:16.0.0'
   //implementation "androidx.camera:camera-core:1.1.0-alpha08"
-  implementation "androidx.camera:camera-core:1.2.3"
+  implementation "androidx.camera:camera-core:1.5.0-alpha03"
   implementation project(':openCV')
 }
