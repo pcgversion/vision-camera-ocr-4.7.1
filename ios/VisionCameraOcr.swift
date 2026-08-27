@@ -387,9 +387,12 @@ public class VisionCameraOcr: FrameProcessorPlugin {
         var textBlocks:[Any] = []
         var finalBlocks:[Any] = []
         //
-        
+        //Disabling the brightness and sharpness calculations for now due to performance concerns.
+        //They can be re-enabled if needed.
+
         // Calculate brightness
-        let brightness = calculateBrightness(image: image)
+        //let brightness = calculateBrightness(image: image)
+        let brightness: Double? = 0.0
         // if let brightnessValue = brightness {
         //     print("Image Brightness: \(brightnessValue)")
         // } else {
@@ -397,7 +400,8 @@ public class VisionCameraOcr: FrameProcessorPlugin {
         // }
 
         //calculate sharpness
-        let sharpness = calculateSharpness(image: image)
+        //let sharpness = calculateSharpness(image: image)
+        let sharpness: Double? = 0.0
         // if let sharpnessValue = sharpness {
         //     print("Image Sharpness: \(sharpnessValue)")
         // } else {
