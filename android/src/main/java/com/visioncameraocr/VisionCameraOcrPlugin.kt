@@ -197,8 +197,12 @@ class VisionCameraOcrPlugin(proxy: VisionCameraProxy, options: Map<String, Any>?
 
             if (bitmap != null) {
                 try {
-                    val brightness = calculateBrightnessScore(bitmap)
-                    val sharpness = calculateSharpnessScore(bitmap)
+                    //Disabling the brightness and sharpness calculations for now due to performance concerns.
+                    //They can be re-enabled if needed.
+                    //val brightness = calculateBrightnessScore(bitmap)
+                    //val sharpness = calculateSharpnessScore(bitmap)
+                    val brightness = 0.0
+                    val sharpness = 0.0
 
                     val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
                     // The bitmap from convertImageProxyToBitmap is already rotated to be upright.
